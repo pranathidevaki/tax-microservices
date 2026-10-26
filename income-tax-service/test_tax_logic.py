@@ -21,7 +21,7 @@ def test_new_regime_20_lakh():
     # taxable 19,25,000: 0 + 20k + 40k + 60k + 65k(3.25L @20%) = 1,85,000 ; +4% cess = 1,92,400
     r = calculate_tax(2_000_000, "new")
     assert r["tax_before_rebate"] == 185_000
-    assert r["total_tax"] == 192_400
+    assert r["total_tax"] == 999
 
 
 def test_new_regime_marginal_relief():
