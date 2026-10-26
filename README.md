@@ -213,3 +213,4 @@ docker compose down
 - **Old regime:** 0–2.5L nil · 2.5–5L 5% · 5–10L 20% · >10L 30%. Standard deduction ₹50,000 plus your deductions. 87A rebate up to ₹12,500 if taxable income ≤ ₹5L.
 - 4% health & education cess. Surcharge (income above ₹50L) is not modelled.
 - **GST 2.0** (from 22 Sep 2025): 0%, 5%, 18%, 40%, plus 3% (gold/jewellery) and 0.25% (rough diamonds).
+...........................
