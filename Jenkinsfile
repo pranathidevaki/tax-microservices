@@ -4,7 +4,7 @@
 // Jenkins setup: New Item -> Pipeline -> "Pipeline script from SCM" -> Git -> repo URL -> Script Path: Jenkinsfile
 
 // run a command with sh on Linux/Mac and bat on Windows
-def run(String cmd) {
+def runCmd(String cmd) {
     if (isUnix()) { sh cmd } else { bat cmd }
 }
 
@@ -34,19 +34,19 @@ pipeline {
 
         stage('Build Docker images') {
             steps {
-                run "docker build -t income-tax-service:${TAG} -t income-tax-service:latest income-tax-service"
-                run "docker build -t gst-service:${TAG} -t gst-service:latest gst-service"
-                run "docker build -t tax-frontend:${TAG} -t tax-frontend:latest frontend"
+                runCmd "docker build -t income-tax-service:${TAG} -t income-tax-service:latest income-tax-service"
+                runCmd "docker build -t gst-service:${TAG} -t gst-service:latest gst-service"
+                runCmd "docker build -t tax-frontend:${TAG} -t tax-frontend:latest frontend"
             }
         }
 
         stage('Unit tests') {
             parallel {
                 stage('income-tax-service') {
-                    steps { run "docker run --rm income-tax-service:${TAG} python -m pytest -v" }
+                    steps { runCmd "docker run --rm income-tax-service:${TAG} python -m pytest -v" }
                 }
                 stage('gst-service') {
-                    steps { run "docker run --rm gst-service:${TAG} node --test" }
+                    steps { runCmd "docker run --rm gst-service:${TAG} node --test" }
                 }
             }
         }
@@ -54,15 +54,15 @@ pipeline {
         stage('Deploy to Kubernetes') {
             when { expression { params.DEPLOY_TO_K8S } }
             steps {
-                run "kubectl apply -f k8s/"
+                runCmd "kubectl apply -f k8s/"
                 // point each Deployment at THIS build's image -> Kubernetes does a rolling update
-                run "kubectl set image deployment/income-tax-service income-tax-service=income-tax-service:${TAG}"
-                run "kubectl set image deployment/gst-service gst-service=gst-service:${TAG}"
-                run "kubectl set image deployment/frontend frontend=tax-frontend:${TAG}"
-                run "kubectl rollout status deployment/income-tax-service --timeout=120s"
-                run "kubectl rollout status deployment/gst-service --timeout=120s"
-                run "kubectl rollout status deployment/frontend --timeout=120s"
-                run "kubectl get pods,svc"
+                runCmd "kubectl set image deployment/income-tax-service income-tax-service=income-tax-service:${TAG}"
+                runCmd "kubectl set image deployment/gst-service gst-service=gst-service:${TAG}"
+                runCmd "kubectl set image deployment/frontend frontend=tax-frontend:${TAG}"
+                runCmd "kubectl rollout status deployment/income-tax-service --timeout=120s"
+                runCmd "kubectl rollout status deployment/gst-service --timeout=120s"
+                runCmd "kubectl rollout status deployment/frontend --timeout=120s"
+                runCmd "kubectl get pods,svc"
             }
         }
     }
