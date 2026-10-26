@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tax Calculator · Microservices</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --card: #fffdf8; --ink: #1d2321; --muted: #6b716d;
+    --line: #ddd6c8; --accent: #1f6f5c; --accent-soft: #e2efe9; --warn: #a3412f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 28px 16px 8px; max-width: 980px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .card h2 { margin: 0 0 4px; font-size: 18px; }
+  .card .sub { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input, select { font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--ink); }
+  button { font: inherit; font-weight: 600; padding: 10px 14px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #fff; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 18px; }
+  .regime { border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .regime.best { border-color: var(--accent); background: var(--accent-soft); }
+  .regime h3 { margin: 0 0 8px; font-size: 15px; display: flex; justify-content: space-between; }
+  .badge { font-size: 11px; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 99px; }
+  .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+  td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  td:last-child { text-align: right; }
+  .error { color: var(--warn); margin-top: 12px; }
+  .status { font-size: 12px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #bbb; margin-right: 6px; }
+  .dot.up { background: #2f9e6f; } .dot.down { background: var(--warn); }
+  footer { max-width: 980px; margin: 0 auto; padding: 0 16px 28px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tax Calculation Microservices</h1>
+  <p>Income tax (FY 2026-27) and GST — each calculation is served by its own containerised service.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Income tax — new vs old regime</h2>
+    <p class="sub">Served by <b>income-tax-service</b> (Python / Flask) via <code>/api/tax/compare</code></p>
+    <form id="taxForm">
+      <label>Annual income (₹)
+        <input id="income" type="number" min="0" step="1000" value="1500000" required>
+      </label>
+      <label>Deductions — 80C, 80D… (₹, old regime only)
+        <input id="deductions" type="number" min="0" step="1000" value="150000">
+      </label>
+      <label class="check"><input id="salaried" type="checkbox" checked> Salaried (standard deduction)</label>
+      <button type="submit">Calculate</button>
+    </form>
+    <div id="taxError" class="error"></div>
+    <div id="taxResults" class="results"></div>
+  </section>
+
+  <section class="card">
+    <h2>GST calculator</h2>
+    <p class="sub">Served by <b>gst-service</b> (Node.js / Express) via <code>/api/gst/calculate</code></p>
+    <form id="gstForm">
+      <label>Amount (₹)
+        <input id="amount" type="number" min="0" step="0.01" value="1000" required>
+      </label>
+      <label>GST rate
+        <select id="rate">
+          <option value="0">0%</option><option value="0.25">0.25%</option><option value="3">3%</option>
+          <option value="5">5%</option><option value="18" selected>18%</option><option value="40">40%</option>
+        </select>
+      </label>
+      <label class="check"><input id="inclusive" type="checkbox"> Amount already includes GST</label>
+      <label class="check"><input id="interstate" type="checkbox"> Inter-state (IGST)</label>
+      <button type="submit">Calculate</button>
+    </form>
+    <div id="gstError" class="error"></div>
+    <div id="gstResults" class="results"></div>
+  </section>
+</main>
+
+<footer class="status">
+  <span><span id="taxDot" class="dot"></span>income-tax-service <span id="taxHost"></span></span>
+  <span><span id="gstDot" class="dot"></span>gst-service <span id="gstHost"></span></span>
+</footer>
+
+<script>
+const inr = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+
+async function post(url, body) {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+function regimeCard(r, best) {
+  const slabs = r.slab_breakdown.filter(s => s.taxable_amount > 0).map(s =>
+    row(`${inr(s.from)} – ${s.to ? inr(s.to) : "above"} @ ${s.rate_percent}%`, inr(s.tax))).join("");
+  return `<div class="regime ${best ? "best" : ""}">
+    <h3>${r.regime === "new" ? "New regime" : "Old regime"} ${best ? '<span class="badge">Lower tax</span>' : ""}</h3>
+    <div class="big">${inr(r.total_tax)}</div>
+    <table>
+      ${row("Gross income", inr(r.gross_income))}
+      ${row("Standard deduction", "− " + inr(r.standard_deduction))}
+      ${row("Other deductions", "− " + inr(r.other_deductions))}
+      ${row("<b>Taxable income</b>", "<b>" + inr(r.taxable_income) + "</b>")}
+      ${slabs}
+      ${row("Tax before rebate", inr(r.tax_before_rebate))}
+      ${row("Sec 87A rebate / relief", "− " + inr(r.rebate_87a))}
+      ${row("Cess (4%)", inr(r.cess))}
+      ${row("Effective rate", r.effective_rate_percent + "%")}
+      ${row("Monthly take-home", inr(r.monthly_take_home))}
+    </table></div>`;
+}
+
+document.getElementById("taxForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = document.getElementById("taxError"), out = document.getElementById("taxResults");
+  err.textContent = ""; out.innerHTML = "";
+  try {
+    const d = await post("/api/tax/compare", {
+      annual_income: +document.getElementById("income").value,
+      deductions: +document.getElementById("deductions").value || 0,
+      salaried: document.getElementById("salaried").checked,
+    });
+    out.innerHTML = regimeCard(d.new, d.recommended === "new") + regimeCard(d.old, d.recommended === "old");
+  } catch (x) { err.textContent = x.message; }
+});
+
+document.getElementById("gstForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = document.getElementById("gstError"), out = document.getElementById("gstResults");
+  err.textContent = ""; out.innerHTML = "";
+  try {
+    const d = await post("/api/gst/calculate", {
+      amount: +document.getElementById("amount").value,
+      rate: +document.getElementById("rate").value,
+      inclusive: document.getElementById("inclusive").checked,
+      interstate: document.getElementById("interstate").checked,
+    });
+    out.innerHTML = `<div class="regime best"><h3>Invoice total</h3><div class="big">${inr(d.total_amount)}</div><table>
+      ${row("Base amount", inr(d.base_amount))}
+      ${row("Supply type", d.supply_type)}
+      ${d.supply_type === "intra-state"
+        ? row(`CGST (${d.rate_percent / 2}%)`, inr(d.cgst)) + row(`SGST (${d.rate_percent / 2}%)`, inr(d.sgst))
+        : row(`IGST (${d.rate_percent}%)`, inr(d.igst))}
+      ${row("Total GST", inr(d.total_gst))}</table></div>`;
+  } catch (x) { err.textContent = x.message; }
+});
+
+// Health check footer: shows which container / pod answered (refresh to see load balancing)
+async function health(url, dot, host) {
+  try {
+    const d = await (await fetch(url)).json();
+    document.getElementById(dot).className = "dot up";
+    document.getElementById(host).textContent = `· ${d.version} · pod ${d.host}`;
+  } catch { document.getElementById(dot).className = "dot down"; }
+}
+health("/api/tax/health", "taxDot", "taxHost");
+health("/api/gst/health", "gstDot", "gstHost");
+</script>
+</body>
+</html>

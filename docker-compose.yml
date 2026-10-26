@@ -1,0 +1,39 @@
+# Run the whole application locally with ONE command:   docker compose up --build
+# Then open http://localhost:8081
+#
+# Compose creates a private network where each service can reach the others
+# by its service name (that's how nginx finds "income-tax-service" and "gst-service").
+
+services:
+  income-tax-service:
+    build: ./income-tax-service
+    image: income-tax-service:latest
+    environment:
+      APP_VERSION: "1.0-compose"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  gst-service:
+    build: ./gst-service
+    image: gst-service:latest
+    environment:
+      APP_VERSION: "1.0-compose"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    image: tax-frontend:latest
+    ports:
+      - "8081:80"          # host port 8081 (8080 is taken by Jenkins) -> container port 80
+    depends_on:
+      income-tax-service:
+        condition: service_healthy
+      gst-service:
+        condition: service_healthy

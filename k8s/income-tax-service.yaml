@@ -1,0 +1,51 @@
+# Deployment = "keep N copies (pods) of this container running, replace them if they die"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: income-tax-service
+  labels:
+    app: income-tax-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: income-tax-service
+  template:
+    metadata:
+      labels:
+        app: income-tax-service
+    spec:
+      containers:
+        - name: income-tax-service
+          image: income-tax-service:latest   # the Jenkins pipeline switches this to :<build-number>
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          env:
+            - name: APP_VERSION
+              value: "1.0-k8s"
+          readinessProbe:            # only send traffic once this returns 200
+            httpGet: { path: /health, port: 5000 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:             # restart the container if this starts failing
+            httpGet: { path: /health, port: 5000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 256Mi }
+---
+# Service = a stable name + IP that load-balances across the pods above.
+# ClusterIP = reachable only INSIDE the cluster (only the frontend needs it).
+apiVersion: v1
+kind: Service
+metadata:
+  name: income-tax-service
+spec:
+  type: ClusterIP
+  selector:
+    app: income-tax-service
+  ports:
+    - port: 5000
+      targetPort: 5000

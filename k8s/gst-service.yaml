@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gst-service
+  labels:
+    app: gst-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gst-service
+  template:
+    metadata:
+      labels:
+        app: gst-service
+    spec:
+      containers:
+        - name: gst-service
+          image: gst-service:latest   # the Jenkins pipeline switches this to :<build-number>
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: APP_VERSION
+              value: "1.0-k8s"
+          readinessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gst-service
+spec:
+  type: ClusterIP
+  selector:
+    app: gst-service
+  ports:
+    - port: 3000
+      targetPort: 3000
