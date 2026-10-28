@@ -32,7 +32,8 @@ containers and updates the app with zero downtime."
 3. **Build Docker images**: builds 3 images, each tagged with the Jenkins build number (`gst-service:7`) and `latest`.
 4. **Unit tests**: runs the Python and Node tests **in parallel**, *inside* the freshly built images. If one
    fails, the pipeline stops and nothing gets deployed. This is the **quality gate**.
-5. **Deploy to Kubernetes**: `kubectl apply -f k8s/`, then `kubectl set image ...:<build number>`. Kubernetes does a
+5. **Push Docker Images** (optional): logs in to Docker Hub and pushes all 3 images, tagged with the build number and `latest`.
+6. **Deploy to Kubernetes**: `kubectl apply -f k8s/`, then `kubectl set image ...:<build number>`. Kubernetes does a
    **rolling update** and `rollout status` waits until it has finished.
 
 Why tag with the build number? Each build is a separate image, so you can always tell which version is running,
@@ -65,8 +66,16 @@ requests. Liveness asks "am I still alive?"; if it fails, Kubernetes restarts th
 
 **What happens if a pod crashes?** The Deployment sees 1 pod running when 2 are wanted, and starts a new one. Demo it with `kubectl delete pod`.
 
-**ClusterIP vs LoadBalancer?** ClusterIP is reachable only inside the cluster, which is all the backends need.
-LoadBalancer is reachable from outside (the frontend). On Docker Desktop that means localhost; on a cloud provider it's a public load balancer.
+**ClusterIP vs NodePort vs LoadBalancer?** ClusterIP is reachable only inside the cluster, which is all the backends need.
+NodePort opens a fixed port (30000–32767) on the node so the browser can reach the app. Our frontend uses 30090, and
+`kubectl get svc` shows it as `80:30090/TCP`. LoadBalancer asks a cloud provider for a public load balancer.
+
+**What is `kubectl port-forward`?** It creates a tunnel from a port on your laptop to a Service inside the cluster.
+`kubectl port-forward service/frontend 18082:80` means laptop port 18082 → the Service's port 80. It's a reliable way
+to reach the app when the NodePort isn't reachable from the browser.
+
+**Why push images to Docker Hub?** Docker Hub is a registry, which is like GitHub for images. Any machine or cluster
+can pull the exact image Jenkins built and tested. The token lives in Jenkins Credentials (`dockerhub-creds`), never in the code.
 
 **Rolling update?** Kubernetes starts the new pods and only removes the old ones once the new ones are ready, so there is no downtime.
 

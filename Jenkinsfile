@@ -1,5 +1,5 @@
 // JENKINS PIPELINE  (syllabus weeks 4, 5, 7, 9)
-// Every time it runs:  Checkout from GitHub -> Build Docker images -> Run unit tests -> (optional) Deploy to Kubernetes
+// Every time it runs:  Checkout -> Build Docker images -> Unit tests -> (optional) Push to Docker Hub -> (optional) Deploy to Kubernetes
 // Works on Windows (bat) and Linux/Mac (sh) Jenkins.
 // Jenkins setup: New Item -> Pipeline -> "Pipeline script from SCM" -> Git -> repo URL -> Script Path: Jenkinsfile
 
@@ -17,6 +17,10 @@ pipeline {
     }
 
     parameters {
+        booleanParam(name: 'PUSH_TO_DOCKERHUB', defaultValue: false,
+                     description: 'Push the images to Docker Hub (needs Jenkins credentials with ID dockerhub-creds)')
+        string(name: 'DOCKERHUB_USER', defaultValue: 'pranathidevaki',
+               description: 'Your Docker Hub username')
         booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false,
                      description: 'Also deploy the new images to Kubernetes (Docker Desktop cluster)')
     }
@@ -47,6 +51,29 @@ pipeline {
                 }
                 stage('gst-service') {
                     steps { runCmd "docker run --rm gst-service:${TAG} node --test" }
+                }
+            }
+        }
+
+        stage('Push Docker Images') {
+            when { expression { params.PUSH_TO_DOCKERHUB } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                  usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+                    script {
+                        // log in with the token stored in Jenkins (never written in the code)
+                        if (isUnix()) {
+                            sh 'echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin'
+                        } else {
+                            bat 'echo %DH_PASS%| docker login -u %DH_USER% --password-stdin'
+                        }
+                        for (img in ['income-tax-service', 'gst-service', 'tax-frontend']) {
+                            runCmd "docker tag ${img}:${TAG} ${params.DOCKERHUB_USER}/${img}:${TAG}"
+                            runCmd "docker tag ${img}:${TAG} ${params.DOCKERHUB_USER}/${img}:latest"
+                            runCmd "docker push ${params.DOCKERHUB_USER}/${img}:${TAG}"
+                            runCmd "docker push ${params.DOCKERHUB_USER}/${img}:latest"
+                        }
+                    }
                 }
             }
         }

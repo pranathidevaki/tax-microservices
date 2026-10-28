@@ -161,9 +161,10 @@ kubectl apply -f k8s/
 kubectl get pods                   # wait for 5 pods: Running, READY 1/1
 kubectl get deployments,svc
 ```
-3. Open **http://localhost** (port 80). If it doesn't load, run this and open http://localhost:8082:
+3. Find the port: `kubectl get svc frontend` shows `NodePort` and `80:30090/TCP`, so 30090 is the port.
+   Open **http://localhost:30090**. If it doesn't load, run this, keep it running, and open http://127.0.0.1:18082:
 ```bash
-kubectl port-forward svc/frontend 8082:80
+kubectl port-forward service/frontend 18082:80 --address 127.0.0.1
 ```
 
 ## Step 10 — Week 9: Let Jenkins automate the Kubernetes deployment
@@ -213,4 +214,3 @@ docker compose down
 - **Old regime:** 0–2.5L nil · 2.5–5L 5% · 5–10L 20% · >10L 30%. Standard deduction ₹50,000 plus your deductions. 87A rebate up to ₹12,500 if taxable income ≤ ₹5L.
 - 4% health & education cess. Surcharge (income above ₹50L) is not modelled.
 - **GST 2.0** (from 22 Sep 2025): 0%, 5%, 18%, 40%, plus 3% (gold/jewellery) and 0.25% (rough diamonds).
-...........................
